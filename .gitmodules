@@ -1,0 +1,9 @@
+[submodule "external/SDL"]
+	path = external/SDL
+	url = git@github.com:libsdl-org/SDL.git
+[submodule "external/imgui"]
+	path = external/imgui
+	url = git@github.com:ocornut/imgui.git
+[submodule "external/shaderc"]
+	path = external/shaderc
+	url = git@github.com:google/shaderc.git
