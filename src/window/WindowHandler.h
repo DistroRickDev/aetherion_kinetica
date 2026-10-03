@@ -5,6 +5,7 @@
 #include <list>
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 class SDL_Window;
 using Window = SDL_Window;
@@ -47,6 +48,11 @@ namespace engine::window {
             WINDOW_NOT_FOCUSABLE = 0x0000000080000000 /**< window should not be focusable */
         };
 
+        enum class WindowType : std::uint8_t {
+            MainWindow,
+            GpuRenderWindow,
+        };
+
         struct WindowSettings {
             explicit WindowSettings(std::string title, std::int32_t width, std::int32_t height,
                                     std::list<WindowFlags> flags = {});
@@ -65,16 +71,17 @@ namespace engine::window {
 
         ~WindowHandler();
 
-        std::uint32_t createWindow(const WindowSettings &window_settings) noexcept;
+        void createWindow(const WindowSettings &window_settings, WindowType window_type) noexcept;
 
-        void destroyWindow(std::uint32_t windowId) noexcept;
+        void destroyWindow(WindowType window_type) noexcept;
+
+        void destroyWindowById(std::uint32_t windowId) noexcept;
 
         [[nodiscard]] Window *getMainWindow() const;
 
     private:
         std::shared_ptr<WindowSettings> _settingsWindow;
-        Window *_main_window;
-        std::list<Window *> _windows{};
+        std::unordered_map<WindowType, Window *> _windows{};
     };
 } // namespace engine::window
 #endif

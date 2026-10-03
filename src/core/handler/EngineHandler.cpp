@@ -2,14 +2,13 @@
 
 #include <atomic>
 
-#include "core/gui/EngineGui.h"
-#include "core/3d/TestTriangle.h"
+#include "core/gui/GuiHandler.h"
+#include "core/logger/ILogger.h"
+#include "core/render/RenderExampleTriangle.h"
 
 #include <SDL3/SDL.h>
 
 #include <format>
-
-#include "core/logger/SdlLoggerHandler.h"
 
 namespace {
     using namespace engine;
@@ -49,7 +48,7 @@ void core::handler::EngineHandler::initialize(const std::list<ModuleType> &modul
     }
 
     if (!engineGuiHandler) {
-        engineGuiHandler = std::make_unique<gui::EngineGui>();
+        engineGuiHandler = std::make_unique<gui::GuiHandler>();
     }
 
     logger::ILogger::debug(std::format("GPU driver: {}", gpuDeviceHandler->getDeviceDriver()));
@@ -73,8 +72,12 @@ void core::handler::EngineHandler::run(const int argc, const char **argv) const 
 
     running.store(true);
     logger::ILogger::info("Starting loop");
+
+    render::ExampleTriangleRender::init(gpuDeviceHandler->getDevice(), windowHandler->getMainWindow());
+
     while (running.load()) {
         engineGuiHandler->renderGui(windowHandler->getMainWindow());
+        render::ExampleTriangleRender::renderTriangle(gpuDeviceHandler->getDevice() ,windowHandler->getMainWindow());
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
@@ -84,7 +87,7 @@ void core::handler::EngineHandler::run(const int argc, const char **argv) const 
                     break;
                 case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
                     releaseAllResources();
-                    windowHandler->destroyWindow(event.window.windowID);
+                    windowHandler->destroyWindowById(event.window.windowID);
                     break;
                 default:
                     engineGuiHandler->handleEvent(event);
@@ -97,11 +100,11 @@ const std::unique_ptr<graphics::GpuDeviceHandler> &core::handler::EngineHandler:
     return gpuDeviceHandler;
 }
 
-const std::unique_ptr<core::gui::EngineGui> & core::handler::EngineHandler::getGuiHandler() noexcept {
+const std::unique_ptr<core::gui::GuiHandler> & core::handler::EngineHandler::getGuiHandler() noexcept {
     return engineGuiHandler;
 }
 
-const std::unique_ptr<window::WindowHandler> &core::handler::EngineHandler::getWindowHandler() noexcept {
+const std::unique_ptr<window::WindowHandler> & core::handler::EngineHandler::getWindowHandler() noexcept {
     return windowHandler;
 }
 
@@ -112,6 +115,7 @@ void core::handler::EngineHandler::releaseAllResources() const {
     /* Always wait for the GPU to finish before destroying things */
     SDL_WaitForGPUIdle(gpuDeviceHandler->getDevice());
 
+    render::ExampleTriangleRender::releaseResources(gpuDeviceHandler->getDevice());
     /* Release resources in reverse creation order */
     // SDL_ReleaseGPUGraphicsPipeline(device, pipeline);
     // SDL_ReleaseGPUBuffer(device, vertex_buffer);
@@ -123,7 +127,7 @@ void core::handler::EngineHandler::releaseAllResources() const {
     gpuDeviceHandler->releaseWindowFromGpuDevice(windowHandler->getMainWindow());
 }
 
-void core::handler::EngineHandler::terminateAllResources() {
+void engine::core::handler::EngineHandler::terminateAllResources() {
     gpuDeviceHandler.reset();
     engineGuiHandler.reset();
     windowHandler.reset();

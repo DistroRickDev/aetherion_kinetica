@@ -4,8 +4,8 @@
 #include <list>
 #include <memory>
 
-#include "core/gui/EngineGui.h"
-#include "graphics/GpuDeviceHandler.h"
+#include "core/graphics/GpuDeviceHandler.h"
+#include "core/gui/GuiHandler.h"
 #include "window/WindowHandler.h"
 
 namespace engine::core::handler {
@@ -36,7 +36,7 @@ namespace engine::core::handler {
 
         const std::unique_ptr<graphics::GpuDeviceHandler>& getGpuDeviceHandler() noexcept;
 
-        const std::unique_ptr<gui::EngineGui>& getGuiHandler() noexcept;
+        const std::unique_ptr<gui::GuiHandler>& getGuiHandler() noexcept;
 
         const std::unique_ptr<window::WindowHandler>& getWindowHandler() noexcept;
 
@@ -48,7 +48,7 @@ namespace engine::core::handler {
         void terminateAllResources();
 
         std::unique_ptr<graphics::GpuDeviceHandler> gpuDeviceHandler;
-        std::unique_ptr<gui::EngineGui> engineGuiHandler;
+        std::unique_ptr<gui::GuiHandler> engineGuiHandler;
         std::unique_ptr<window::WindowHandler> windowHandler;
     };
 }

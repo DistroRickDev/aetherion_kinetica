@@ -1,7 +1,5 @@
-project(EngineRenderer)
+project(render)
 
-add_library(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
-target_link_libraries(${PROJECT_NAME} PUBLIC SDL3)
-if(NOT USE_SYSTEM_SDL)
-  target_include_directories(${PROJECT_NAME} PUBLIC ${EXTERNAL_DIR}/SDL/include)
-endif()
+add_library(${PROJECT_NAME} EngineRenderer.cpp)
+target_link_libraries(${PROJECT_NAME} PUBLIC SDL3::SDL3 logger)
+target_include_directories(${PROJECT_NAME} PUBLIC ${EXTERNAL_DIR}/SDL/include ${CMAKE_SOURCE_DIR}/src)

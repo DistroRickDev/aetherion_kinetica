@@ -1,8 +1,8 @@
 #include "SdlLoggerHandler.h"
 
 #include <chrono>
+#include <iomanip>
 #include <stacktrace>
-#include <unordered_map>
 
 #include <SDL3/SDL_log.h>
 
