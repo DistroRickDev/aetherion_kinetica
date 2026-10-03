@@ -1,8 +1,7 @@
 #ifndef AETHERION_KINETICA_GUI_HANDLER_H
 #define AETHERION_KINETICA_GUI_HANDLER_H
 
-#include <atomic>
-#include <thread>
+#include <functional>
 
 union SDL_Event;
 class SDL_Window;
@@ -13,24 +12,26 @@ using GuiRenderer = SDL_Renderer;
 using GuiWindow = SDL_Window;
 
 namespace engine::core::gui {
-    class EngineGui {
+    class GuiHandler {
     public:
-        ~EngineGui();
+        ~GuiHandler();
 
-        EngineGui() = default;
+        GuiHandler() = default;
 
-        EngineGui(EngineGui const &) = delete;
+        GuiHandler(GuiHandler const &) = delete;
 
-        void operator=(EngineGui const &) = delete;
+        void operator=(GuiHandler const &) = delete;
 
         void init(GuiWindow *window);
 
-        void renderGui(GuiWindow *window);
+        void renderGui(GuiWindow *window) const;
 
         void handleEvent(const GuiEvent &event) const;
 
+
     private:
         GuiRenderer *renderer{nullptr};
+        std::function<void()> renderFunction{[]{}};
     };
 }
 

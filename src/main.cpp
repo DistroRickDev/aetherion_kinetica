@@ -8,6 +8,5 @@ int main(const int argc, const char **argv) {
     auto engine{engine::core::handler::EngineHandler()};
     engine.initialize();
     engine.run(argc, argv);
-
     return 0;
 }

@@ -5,9 +5,6 @@
 #include <SDL3/SDL_gpu.h>
 #include <SDL3/SDL_video.h>
 
-namespace {
-}
-
 namespace engine::graphics {
     GpuDeviceHandler::GpuDeviceHandler(const bool enableDebugMode) {
         this->_device = SDL_CreateGPUDevice(
@@ -40,4 +37,14 @@ namespace engine::graphics {
     void GpuDeviceHandler::releaseWindowFromGpuDevice(Window *window) const {
         SDL_ReleaseWindowFromGPUDevice(this->_device, window);
     }
+
+    GpuCommandBuffer *GpuDeviceHandler::acquireCommandBuffer() const {
+        auto *commandBuffer = SDL_AcquireGPUCommandBuffer(this->_device);
+        if (!commandBuffer) {
+            throw std::runtime_error("failed to acquire GPU command buffer");
+        }
+        return commandBuffer;
+    }
+
+
 }

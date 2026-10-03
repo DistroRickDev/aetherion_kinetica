@@ -3,10 +3,14 @@
 
 #include <string>
 
+class SDL_GPUCommandBuffer;
 class SDL_GPUDevice;
+class SDL_GPUTexture;
 class SDL_Window;
 
 using Device = SDL_GPUDevice;
+using GpuCommandBuffer = SDL_GPUCommandBuffer;
+using GpuTexture = SDL_GPUTexture;
 using Window = SDL_Window;
 
 namespace engine::graphics {
@@ -24,6 +28,10 @@ namespace engine::graphics {
         bool claimWindow(Window *window) const;
 
         void releaseWindowFromGpuDevice(Window *window) const;
+
+        [[nodiscard]] GpuCommandBuffer* acquireCommandBuffer() const;
+
+
 
     private:
         Device *_device;

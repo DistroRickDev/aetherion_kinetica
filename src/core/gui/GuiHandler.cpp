@@ -1,22 +1,35 @@
-#include "EngineGui.h"
+#include "GuiHandler.h"
+
+#include "shader/CompileShaderWindow.h"
 
 #include <format>
-#include <queue>
+#include <array>
+#include <filesystem>
 
 #include "core/logger/SdlLoggerHandler.h"
 
 #include <SDL3/SDL.h>
 #include <imgui/backends/imgui_impl_sdl3.h>
+
+#include "imgui_internal.h"
+#include "builder/GuiBuilder.h"
 #include "imgui/backends/imgui_impl_sdlrenderer3.h"
-#include <imgui/imgui.h>
 
 namespace {
-    constexpr auto *kEngineGuiRenderName{"EngineGuiRenderer"};
-    const auto kMainScale{SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay()) ? 1.0f : 1.0f};
-    constexpr auto kClearColor{ImVec4(0.45f, 0.55f, 0.60f, 1.00f)};
-    bool show_demo_window{false};
+    using Logger = engine::core::logger::SdlLoggerHandler;
 
-    void render(SDL_Renderer *renderer, GuiWindow *window) {
+    constexpr auto *kEngineGuiRenderName{"EngineGuiRenderer"};
+    constexpr auto kMainScale{1.0f};
+    constexpr auto kClearColor{ImVec4(0.45f, 0.55f, 0.60f, 1.00f)};
+
+    void statGuiFrame() {
+        // Start the Dear ImGui frame
+        ImGui_ImplSDLRenderer3_NewFrame();
+        ImGui_ImplSDL3_NewFrame();
+        ImGui::NewFrame();
+    }
+
+    void renderMainWindow(SDL_Renderer *renderer, GuiWindow *window) {
         const ImGuiIO &io = ImGui::GetIO();
         (void) io;
 
@@ -24,17 +37,43 @@ namespace {
             SDL_Delay(10);
         }
 
-        // Start the Dear ImGui frame
-        ImGui_ImplSDLRenderer3_NewFrame();
-        ImGui_ImplSDL3_NewFrame();
-        ImGui::NewFrame();
+        statGuiFrame();
 
-        if (show_demo_window)
-            ImGui::ShowDemoWindow(&show_demo_window);
+        if (ImGui::BeginMainMenuBar()) {
+            engine::core::gui::addMenu<3>("File", {
+                                              engine::core::gui::MenuItem{
+                                                  .label = "Open", .shortcut = "Ctrl+O",
+                                              },
+                                              engine::core::gui::MenuItem{
+                                                  .label = "Save", .shortcut = "Ctrl+S",
+                                              },
+                                              engine::core::gui::MenuItem{
+                                                  .label = "Close", .shortcut = "Ctrl+W"
+                                              }
+                                          });
+            engine::core::gui::addMenu<2>("Shaders", {
+                                              engine::core::gui::MenuItem{
+                                                  .label = "Open SPIRV", .shortcut = "",
+                                                  .onItemClicked = [] { Logger::debug("Open SPIRV ..."); }
+                                              },
+                                              engine::core::gui::MenuItem{
+                                                  .label = "Compile GLSL", .shortcut = "",
+                                                  .onItemClicked = [] {
+                                                      Logger::debug("GLSL Compile clicked ...");
+                                                      engine::core::gui::setShowCompileShaderWindow(true);
+                                                  }
+                                              },
+                                          });
+            ImGui::EndMainMenuBar();
+        }
 
-        ImGui::BeginMainMenuBar();
-        ImGui::Checkbox("Demo Window", &show_demo_window);
-        ImGui::EndMainMenuBar();
+        if (engine::core::gui::showCompileShaderWindow()) {
+            engine::core::gui::compileShaderWindow();
+        }
+
+        if (engine::core::gui::showPersistShaderWindow()) {
+            engine::core::gui::persistShaderWindow();
+        }
 
         // Rendering
         ImGui::Render();
@@ -47,8 +86,8 @@ namespace {
 }
 
 namespace engine::core::gui {
-    EngineGui::~EngineGui() {
-        logger::ILogger::debug("Destroying gui resources");
+    GuiHandler::~GuiHandler() {
+        Logger::debug("Destroying gui resources");
 
         // Cleanup
         // [If using SDL_MAIN_USE_CALLBACKS: all code below would likely be your SDL_AppQuit() function]
@@ -60,7 +99,7 @@ namespace engine::core::gui {
         logger::ILogger::debug("Gui resources cleaned");
     }
 
-    void EngineGui::init(SDL_Window *window) {
+    void GuiHandler::init(SDL_Window *window) {
         logger::ILogger::debug("Setting up renderer ...");
         if (window == nullptr) {
             throw std::runtime_error("ERROR: Windows is null");
@@ -98,11 +137,11 @@ namespace engine::core::gui {
         ImGui_ImplSDLRenderer3_Init(renderer);
     }
 
-    void EngineGui::renderGui(GuiWindow *window) {
-        render(renderer, window);
+    void GuiHandler::renderGui(GuiWindow *window) const {
+        renderMainWindow(renderer, window);
     }
 
-    void EngineGui::handleEvent(const GuiEvent &event) const {
+    void GuiHandler::handleEvent(const GuiEvent &event) const {
         ImGui_ImplSDL3_ProcessEvent(&event);
     }
 }
