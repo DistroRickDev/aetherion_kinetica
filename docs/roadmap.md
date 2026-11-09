@@ -5,7 +5,8 @@ AI Generated Roadmap base.
 ## Core technology choices (suggested building blocks)
 
 ### 1) Language/runtime + build system (cross-platform)
-- **Language:** C++ is the most common for performance + engine ecosystems.
+- ~~**Language:** C++ is the most common for performance + engine ecosystems.~~
+- **Language:** Odin is a fast, data-oriented systems programming language built as a modern alternative to C, offering explicit memory control and simple syntax without the complexity of C++.
 - **Build system:** CMake (portable project configuration across Windows/Linux/macOS).
 - **Package/dependency management:** vcpkg or Conan (to pull in libs reproducibly).
 - **Target platforms:** Desktop OSes (Windows + Linux first; add macOS if you want).
@@ -84,7 +85,7 @@ Even if you don’t code now, plan for:
 ### 9) Scripting / gameplay hot-reload
 For rapid iteration:
 - **Lua** or **Python-like tooling** (Lua is common in engines)
-- or **game logic in C++** early and add scripting later.
+- or **game logic in ~~C++~~ Odin** early and add scripting later.
 
 HL2-era workflows were very iteration-friendly; you can recreate that with:
 - hot reload
