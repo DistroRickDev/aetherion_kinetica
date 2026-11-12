@@ -25,6 +25,10 @@ init_logger :: proc() {
 	)
 }
 
+destroy_logger :: proc() {
+	log.destroy_console_logger(context.logger)
+}
+
 debug ::  proc(fmt_str: string, args: ..any, location := #caller_location) {
 	log.debugf(fmt_str, args, location)
 }

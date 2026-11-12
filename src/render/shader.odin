@@ -2,6 +2,16 @@ package render
 
 import sdl "vendor:sdl3"
 
+ShaderObject :: struct {
+	shader_data:     []u8,
+	shader_metadata: struct {
+		num_of_samplers:     u32,
+		storage_textures:    u32,
+		storage_buffers:     u32,
+		num_uniform_buffers: u32,
+	},
+}
+
 load_shader :: proc(
 	device: ^sdl.GPUDevice,
 	code: []u8,

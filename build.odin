@@ -29,6 +29,7 @@ run_critical_process :: proc(cmd: []string) {
 build_sdl3 :: proc() {
 	log.debug("Attempting to build SDL")
 	run_critical_process({"cmake", "--build", BUILD_DIR, "--target", "SDL3-shared", "-j16"})
+	run_critical_process({"cp", "-r", BUILD_DIR + SDL_BUID_DIR + "/libSDL3.so.0.5.0", BUILD_DIR + "/libSDL3.so"})
 }
 
 run_external_libs_cmake :: proc() {
