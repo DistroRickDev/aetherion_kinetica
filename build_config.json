@@ -1,10 +1,10 @@
 {
-  "run_cmake": false,
+  "run_cmake": true,
   "build_flags": {
     "build_sdl": false,
-    "build_spriv_cross": true,
-    "build_shader_c": true,
-    "build_im_gui": true
+    "build_spirv_cross": false,
+    "build_shader_c": false,
+    "build_im_gui": false
   },
   "build_command": "build",
   "shader_config": {

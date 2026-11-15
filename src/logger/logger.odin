@@ -2,7 +2,7 @@ package logger
 
 import "base:runtime"
 import "core:log"
-import sdl "vendor:sdl3"
+import sdl "../ffi/sdl3"
 
 default_context: runtime.Context
 

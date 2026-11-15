@@ -3,9 +3,9 @@ package main
 import "base:runtime"
 import "core:fmt"
 import "core:mem"
+import sdl "ffi/sdl3"
 import "logger"
 import "render"
-import sdl "vendor:sdl3"
 
 EXAMPLE_FRAG_SHADER_PATH :: "/home/distrorickdev/projects/aetherion_kinetica/examples/shaders/glsl/shader.spv.frag"
 EXAMPLE_VERT_SHADER_PATH :: "/home/distrorickdev/projects/aetherion_kinetica/examples/shaders/glsl/shader.spv.vert"
@@ -31,27 +31,8 @@ main :: proc() {
 		{pos = {0.5, -0.5, 0}, color = {1, 0, 1, 1}},
 	}
 
-	render.set_render_primitive(
-		TEST_TRIANGLE,
-		{
-			shader_data = VERT_SHADER_DATA,
-			shader_metadata = {
-				num_of_samplers = 0,
-				storage_textures = 0,
-				storage_buffers = 0,
-				num_uniform_buffers = 1,
-			},
-		},
-		{
-			shader_data = FRAG_SHADER_DATA,
-			shader_metadata = {
-				num_of_samplers = 0,
-				storage_textures = 0,
-				storage_buffers = 0,
-				num_uniform_buffers = 0,
-			},
-		},
-	)
+	render.set_render_primitive(TEST_TRIANGLE, VERT_SHADER_DATA, FRAG_SHADER_DATA)
+
 	last_ticks := sdl.GetTicks()
 
 	main_loop: for {

@@ -1,6 +1,6 @@
 package render
 
-import sdl "vendor:sdl3"
+import sdl "../ffi/sdl3"
 
 Vec3 :: [3]f32
 

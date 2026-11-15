@@ -4,3 +4,4 @@ project(aetherion_kinetica)
 
 set(EXTERNAL_DIR ${CMAKE_SOURCE_DIR}/external)
 add_subdirectory(${EXTERNAL_DIR}/SDL)
+add_subdirectory(${EXTERNAL_DIR}/SPIRV-Cross)

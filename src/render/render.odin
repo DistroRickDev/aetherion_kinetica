@@ -2,7 +2,7 @@ package render
 
 import "core:math/linalg"
 import "core:mem"
-import sdl "vendor:sdl3"
+import sdl "../ffi/sdl3"
 
 WindowSettings :: struct {
 	window_size:  [2]i32,
@@ -59,7 +59,7 @@ init :: proc(settings: WindowSettings) {
 
 destroy_render_resources :: proc() {
 	ok := sdl.WaitForGPUIdle(render_state.device); assert(ok)
-	delete(render_state.vertex_buffers)
+	clean_vertex_buffers()
 	sdl.ReleaseGPUGraphicsPipeline(render_state.device, render_state.pipeline)
 	sdl.DestroyGPUDevice(render_state.device)
 	sdl.DestroyWindow(render_state.main_window)
@@ -71,8 +71,8 @@ clean_vertex_buffers :: proc() {
 		if buffer.gpu_buffer != nil {
 			sdl.ReleaseGPUBuffer(render_state.device, buffer.gpu_buffer)
 		}
+		delete(render_state.vertex_buffers)
 	}
-	delete(render_state.vertex_buffers)
 }
 
 @(private)
@@ -165,22 +165,24 @@ proj_mat: linalg.Matrix4f32
 
 set_render_primitive :: proc(
 	vertices: []VertexData,
-	vertex_shader_obj: ShaderObject,
-	fragment_shader_object: ShaderObject,
+	vertex_shader_byte_buffer: []u8,
+	fragment_shader_byte_buffer: []u8,
 ) {
 	/* 1.- create_shaders */
+	vertex_shader_obj:=get_shader_object_from_data(vertex_shader_byte_buffer)
+
 	vertex_shader := load_shader(
 		render_state.device,
-		vertex_shader_obj.shader_data,
-		.VERTEX,
-		vertex_shader_obj.shader_metadata.num_uniform_buffers,
+		vertex_shader_obj,
+		.VERTEX
 	)
+
+	fragment_shader_object:=get_shader_object_from_data(fragment_shader_byte_buffer)
 
 	fragment_shader := load_shader(
 		render_state.device,
-		fragment_shader_object.shader_data,
-		.FRAGMENT,
-		fragment_shader_object.shader_metadata.num_uniform_buffers,
+		fragment_shader_object,
+		.FRAGMENT
 	)
 
 	/* 2.- create uniform buffer */
