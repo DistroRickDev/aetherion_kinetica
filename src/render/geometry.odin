@@ -3,13 +3,17 @@ package render
 import sdl "../ffi/sdl3"
 
 Vec3 :: [3]f32
+Vec2 :: [2]f32
 
-VertexData :: struct {
+Vertex :: struct {
 	pos:   Vec3,
 	color: sdl.FColor,
+	uv: Vec2
 }
 
-get_vertex_buffer_size :: proc(vertices: []VertexData) -> u32 {
+Vertices :: []Vertex
+
+get_vertex_buffer_size :: proc(vertices: Vertices) -> u32 {
 	vertices_len := len(vertices)
 	assert(vertices_len > 0)
 	return u32(vertices_len * size_of(vertices[0]))

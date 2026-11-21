@@ -1,32 +1,43 @@
 package render
 
+import sdl "../ffi/sdl3"
+import "core:c"
+import "core:fmt"
 import "core:math/linalg"
 import "core:mem"
-import sdl "../ffi/sdl3"
+import "core:slice"
 
-WindowSettings :: struct {
+Window_Settings :: struct {
 	window_size:  [2]i32,
 	window_name:  cstring,
 	window_flags: sdl.WindowFlags,
 }
 
-BufferSlot :: struct {
+Buffer_Slot :: struct {
 	gpu_buffer:  ^sdl.GPUBuffer,
 	buffer_size: u32,
 	usage:       sdl.GPUBufferUsageFlags,
 	in_use:      bool,
 }
 
-@(private)
-RenderState :: struct {
-	main_window:    ^sdl.Window,
-	device:         ^sdl.GPUDevice,
-	pipeline:       ^sdl.GPUGraphicsPipeline,
-	vertex_buffers: [dynamic]BufferSlot,
+Render_Type :: enum u8 {
+	PRIMITIVE,
+	INDEXED_PRIMITIVE,
 }
 
 @(private)
-render_state := RenderState{}
+Render_State :: struct {
+	main_window:         ^sdl.Window,
+	device:              ^sdl.GPUDevice,
+	pipeline:            ^sdl.GPUGraphicsPipeline,
+	gpu_buffers:         [dynamic]Buffer_Slot,
+	vertex_shader_obj:   Shader_Object,
+	fragment_shader_obj: Shader_Object,
+	render_type:         Render_Type,
+}
+
+@(private)
+render_state := Render_State{}
 
 get_window :: proc() -> ^sdl.Window {
 	assert(render_state.main_window != nil)
@@ -38,7 +49,7 @@ get_device :: proc() -> ^sdl.GPUDevice {
 	return render_state.device
 }
 
-init :: proc(settings: WindowSettings) {
+init :: proc(settings: Window_Settings) {
 	//sdl.SetHint(sdl.HINT_VIDEO_DRIVER, "x11")
 	ok := sdl.Init({.VIDEO}); assert(ok)
 
@@ -59,25 +70,27 @@ init :: proc(settings: WindowSettings) {
 
 destroy_render_resources :: proc() {
 	ok := sdl.WaitForGPUIdle(render_state.device); assert(ok)
-	clean_vertex_buffers()
+	clean_gpu_buffers()
+	clean_shader_object(&render_state.vertex_shader_obj)
+	clean_shader_object(&render_state.fragment_shader_obj)
 	sdl.ReleaseGPUGraphicsPipeline(render_state.device, render_state.pipeline)
 	sdl.DestroyGPUDevice(render_state.device)
 	sdl.DestroyWindow(render_state.main_window)
 }
 
 @(private)
-clean_vertex_buffers :: proc() {
-	for buffer in render_state.vertex_buffers {
+clean_gpu_buffers :: proc() {
+	for buffer in render_state.gpu_buffers {
 		if buffer.gpu_buffer != nil {
 			sdl.ReleaseGPUBuffer(render_state.device, buffer.gpu_buffer)
 		}
-		delete(render_state.vertex_buffers)
 	}
+	delete(render_state.gpu_buffers)
 }
 
 @(private)
-transfer_single_buffer_to_gpu :: proc(vertices: []VertexData) {
-	data_size := render_state.vertex_buffers[0].buffer_size
+transfer_single_buffer_to_gpu :: proc(vertices: Vertices) {
+	data_size := render_state.gpu_buffers[0].buffer_size
 	data := raw_data(vertices)
 
 	transfer_buf := sdl.CreateGPUTransferBuffer(
@@ -100,7 +113,7 @@ transfer_single_buffer_to_gpu :: proc(vertices: []VertexData) {
 	sdl.UploadToGPUBuffer(
 		copy_pass,
 		{transfer_buffer = transfer_buf},
-		{buffer = render_state.vertex_buffers[0].gpu_buffer, size = data_size},
+		{buffer = render_state.gpu_buffers[0].gpu_buffer, size = data_size},
 		false,
 	)
 
@@ -108,19 +121,87 @@ transfer_single_buffer_to_gpu :: proc(vertices: []VertexData) {
 	ok := sdl.SubmitGPUCommandBuffer(copy_cmd_buffer); assert(ok)
 }
 
+BufferData :: union #no_nil {
+	Vertices,
+	Indices,
+}
+
+@(private)
+transfer_buffers_to_gpu :: proc(buffer_data: []BufferData) {
+	data_size: u32 = 0
+
+	for &buffer in render_state.gpu_buffers {
+		data_size += buffer.buffer_size
+	}
+
+	transfer_buf := sdl.CreateGPUTransferBuffer(
+		render_state.device,
+		{usage = .UPLOAD, size = u32(data_size)},
+	)
+	defer (sdl.ReleaseGPUTransferBuffer(render_state.device, transfer_buf))
+
+	transfer_mem := transmute([^]byte)sdl.MapGPUTransferBuffer(
+		render_state.device,
+		transfer_buf,
+		false,
+	)
+
+	current_mem_pos := 0
+	for buf_data in buffer_data {
+		bytes: []byte
+		switch data in buf_data {
+		case Vertices:
+			bytes = slice.to_bytes(data)
+		case Indices:
+			bytes = slice.to_bytes(data)
+		}
+		size := len(bytes)
+		mem.copy(transfer_mem[current_mem_pos:], raw_data(bytes), size)
+		current_mem_pos += len(bytes)
+	}
+
+	sdl.UnmapGPUTransferBuffer(render_state.device, transfer_buf)
+
+	copy_cmd_buffer := sdl.AcquireGPUCommandBuffer(render_state.device)
+	copy_pass := sdl.BeginGPUCopyPass(copy_cmd_buffer)
+
+	// Loop over gpu buffers to transfer
+	transfer_offset: u32 = 0
+	for &buf_data in render_state.gpu_buffers {
+		sdl.UploadToGPUBuffer(
+			copy_pass,
+			{transfer_buffer = transfer_buf, offset = transfer_offset},
+			{buffer = buf_data.gpu_buffer, size = buf_data.buffer_size},
+			false,
+		)
+		transfer_offset += buf_data.buffer_size
+	}
+
+	sdl.EndGPUCopyPass(copy_pass)
+	ok := sdl.SubmitGPUCommandBuffer(copy_cmd_buffer); assert(ok)
+}
+
 @(private)
 create_gpu_graphics_pipeline :: proc(
-	vertex_shader_obj: ShaderObject,
 	vertex_shader: ^sdl.GPUShader,
-	fragment_shader_obj: ShaderObject,
 	fragment_shader: ^sdl.GPUShader,
 ) {
 
-	// TODO: Data needs to be provided via shader metada via spirv-cross reflection
-	vertex_attr := []sdl.GPUVertexAttribute {
-		{location = 0, format = .FLOAT3, offset = u32(offset_of(VertexData, pos))},
-		{location = 1, format = .FLOAT4, offset = u32(offset_of(VertexData, color))},
+	temp_vertex_attr := make(
+		[]sdl.GPUVertexAttribute,
+		len(render_state.vertex_shader_obj.shader_metadata.inputs.resources),
+	)
+	defer delete(temp_vertex_attr)
+	current_offset: u32 = 0
+	for &input, idx in render_state.vertex_shader_obj.shader_metadata.inputs.resources {
+		temp_vertex_attr[idx] = {
+			location = input.location,
+			format   = input.format,
+			offset   = current_offset,
+		}
+		current_offset += format_to_size(input.format)
 	}
+	vertex_attr := temp_vertex_attr[:]
 
 	render_state.pipeline = sdl.CreateGPUGraphicsPipeline(
 		render_state.device,
@@ -132,7 +213,7 @@ create_gpu_graphics_pipeline :: proc(
 				num_vertex_buffers = 1,
 				vertex_buffer_descriptions = &(sdl.GPUVertexBufferDescription {
 						slot = 0,
-						pitch = size_of(VertexData),
+						pitch = size_of(Vertex),
 					}),
 				num_vertex_attributes = u32(len(vertex_attr)),
 				vertex_attributes = raw_data(vertex_attr),
@@ -163,55 +244,65 @@ rotation := f32(0)
 @(private)
 proj_mat: linalg.Matrix4f32
 
-set_render_primitive :: proc(
-	vertices: []VertexData,
+set_render_buffer_data :: proc(
+	buffer_data: []BufferData,
 	vertex_shader_byte_buffer: []u8,
 	fragment_shader_byte_buffer: []u8,
 ) {
 	/* 1.- create_shaders */
-	vertex_shader_obj:=get_shader_object_from_data(vertex_shader_byte_buffer)
+	render_state.vertex_shader_obj = get_shader_object_from_data(vertex_shader_byte_buffer)
 
-	vertex_shader := load_shader(
-		render_state.device,
-		vertex_shader_obj,
-		.VERTEX
-	)
+	vertex_shader := load_shader(render_state.device, render_state.vertex_shader_obj, .VERTEX)
 
-	fragment_shader_object:=get_shader_object_from_data(fragment_shader_byte_buffer)
+	render_state.fragment_shader_obj = get_shader_object_from_data(fragment_shader_byte_buffer)
 
 	fragment_shader := load_shader(
 		render_state.device,
-		fragment_shader_object,
-		.FRAGMENT
+		render_state.fragment_shader_obj,
+		.FRAGMENT,
 	)
 
 	/* 2.- create uniform buffer */
-	vertices_byte_size := get_vertex_buffer_size(vertices)
+	vertices_byte_size: u32 = 0
+	indices_byte_size: u32 = 0
 
-	append(&render_state.vertex_buffers, {
-		gpu_buffer  = sdl.CreateGPUBuffer(
-			render_state.device,
-			{usage = {.VERTEX}, size = u32(vertices_byte_size)},
-		),
-		buffer_size = vertices_byte_size,
-		usage       = {.VERTEX},
-		in_use      = true,
-	})
+	render_state.render_type = .PRIMITIVE
+
+	for &data in buffer_data {
+		usage: sdl.GPUBufferUsageFlag
+		byte_size: u32 = 0
+		switch value in data {
+		case Vertices:
+			usage = .VERTEX
+			byte_size = get_vertex_buffer_size(value)
+		case Indices:
+			usage = .INDEX
+			byte_size = get_indices_size(value)
+			render_state.render_type = .INDEXED_PRIMITIVE
+		}
+		append(
+			&render_state.gpu_buffers,
+			{
+				gpu_buffer = sdl.CreateGPUBuffer(
+					render_state.device,
+					{usage = {usage}, size = byte_size},
+				),
+				buffer_size = byte_size,
+				usage = {usage},
+				in_use = true,
+			},
+		)
+	}
 
 	/* 3.- Transfer buffer to GPU
 		   -> Create transfer buffer
 		   -> Copy vertex data
 		   -> Transfer to GPU
 	*/
-	transfer_single_buffer_to_gpu(vertices)
+	transfer_buffers_to_gpu(buffer_data)
 
 	/* 4.- Create GPU graphics pipeline */
-	create_gpu_graphics_pipeline(
-		vertex_shader_obj,
-		vertex_shader,
-		fragment_shader_object,
-		fragment_shader,
-	)
+	create_gpu_graphics_pipeline(vertex_shader, fragment_shader)
 
 	/* 5.- Release shaders */
 	release_shaders(vertex_shader, fragment_shader)
@@ -259,13 +350,24 @@ render_frame :: proc(delta_time: f32) {
 		sdl.BindGPUVertexBuffers(
 			render_pass,
 			0,
-			&(sdl.GPUBufferBinding{buffer = render_state.vertex_buffers[0].gpu_buffer}),
+			&(sdl.GPUBufferBinding{buffer = render_state.gpu_buffers[0].gpu_buffer}),
 			1,
 		)
-		//sdl.BindGPUIndexBuffer(render_pass, {buffer = index_buf}, ._16BIT)
+
+		for &buffer in render_state.gpu_buffers {
+			if .INDEX in buffer.usage {
+				sdl.BindGPUIndexBuffer(render_pass, {buffer = buffer.gpu_buffer}, ._16BIT)
+			}
+		}
+
 		sdl.PushGPUVertexUniformData(cmd_buf, 0, &ubo, size_of(ubo))
-		sdl.DrawGPUPrimitives(render_pass, 3, 1, 0, 0)
-		//sdl.DrawGPUIndexedPrimitives(render_pass, 6, 1, 0, 0, 0)
+		switch render_state.render_type {
+		case .PRIMITIVE:
+			sdl.DrawGPUPrimitives(render_pass, 3, 1, 0, 0)
+		case .INDEXED_PRIMITIVE:
+			sdl.DrawGPUIndexedPrimitives(render_pass, 6, 1, 0, 0, 0)
+		}
+
 		sdl.EndGPURenderPass(render_pass)
 	}
 
