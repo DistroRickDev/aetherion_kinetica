@@ -2,6 +2,7 @@ package main
 
 import "base:runtime"
 import "core:fmt"
+import "core:log"
 import "core:mem"
 import sdl "ffi/sdl3"
 import "logger"
@@ -13,17 +14,19 @@ EXAMPLE_VERT_SHADER_PATH :: "/home/distrorickdev/projects/aetherion_kinetica/exa
 FRAG_SHADER_DATA := #load(EXAMPLE_FRAG_SHADER_PATH)
 VERT_SHADER_DATA := #load(EXAMPLE_VERT_SHADER_PATH)
 
+global_logger: log.Logger
+
 main :: proc() {
 	track: mem.Tracking_Allocator
 	mem.tracking_allocator_init(&track, context.allocator)
 	defer mem.tracking_allocator_destroy(&track)
 	context.allocator = mem.tracking_allocator(&track)
 
+	context.logger = global_logger
 	logger.init_logger()
-	defer (logger.destroy_logger())
+	defer(logger.destroy_logger())
 
-	render.init({window_name = "Hello SDL3", window_size = {1280, 780}, window_flags = {}})
-	defer (render.destroy_render_resources())
+	render.init({window_name = "Aetherion Kinetica", window_size = {1280, 780}, window_flags = {}})
 
 	TEST_TRIANGLE :: []render.VertexData {
 		{pos = {-0.5, -0.5, 0}, color = {1, 0, 0, 1}},
@@ -56,6 +59,8 @@ main :: proc() {
 		// render
 		render.render_frame(delta_time)
 	}
+
+	render.destroy_render_resources()
 
 	if len(track.allocation_map) > 0 {
 		for _, leak in track.allocation_map {

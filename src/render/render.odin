@@ -1,8 +1,9 @@
 package render
 
+import sdl "../ffi/sdl3"
+import "core:fmt"
 import "core:math/linalg"
 import "core:mem"
-import sdl "../ffi/sdl3"
 
 WindowSettings :: struct {
 	window_size:  [2]i32,
@@ -23,6 +24,8 @@ RenderState :: struct {
 	device:         ^sdl.GPUDevice,
 	pipeline:       ^sdl.GPUGraphicsPipeline,
 	vertex_buffers: [dynamic]BufferSlot,
+	vertex_shader_obj: Shader_Object,
+	fragment_shader_obj: Shader_Object
 }
 
 @(private)
@@ -60,6 +63,8 @@ init :: proc(settings: WindowSettings) {
 destroy_render_resources :: proc() {
 	ok := sdl.WaitForGPUIdle(render_state.device); assert(ok)
 	clean_vertex_buffers()
+	clean_shader_object(&render_state.vertex_shader_obj)
+	clean_shader_object(&render_state.fragment_shader_obj)
 	sdl.ReleaseGPUGraphicsPipeline(render_state.device, render_state.pipeline)
 	sdl.DestroyGPUDevice(render_state.device)
 	sdl.DestroyWindow(render_state.main_window)
@@ -71,8 +76,8 @@ clean_vertex_buffers :: proc() {
 		if buffer.gpu_buffer != nil {
 			sdl.ReleaseGPUBuffer(render_state.device, buffer.gpu_buffer)
 		}
-		delete(render_state.vertex_buffers)
 	}
+	delete(render_state.vertex_buffers)
 }
 
 @(private)
@@ -110,17 +115,25 @@ transfer_single_buffer_to_gpu :: proc(vertices: []VertexData) {
 
 @(private)
 create_gpu_graphics_pipeline :: proc(
-	vertex_shader_obj: ShaderObject,
 	vertex_shader: ^sdl.GPUShader,
-	fragment_shader_obj: ShaderObject,
 	fragment_shader: ^sdl.GPUShader,
 ) {
 
-	// TODO: Data needs to be provided via shader metada via spirv-cross reflection
-	vertex_attr := []sdl.GPUVertexAttribute {
-		{location = 0, format = .FLOAT3, offset = u32(offset_of(VertexData, pos))},
-		{location = 1, format = .FLOAT4, offset = u32(offset_of(VertexData, color))},
+	temp_vertex_attr := make(
+		[]sdl.GPUVertexAttribute,
+		len(render_state.vertex_shader_obj.shader_metadata.inputs.resources),
+	)
+	defer delete(temp_vertex_attr)
+	current_offset: u32 = 0
+	for &input, idx in render_state.vertex_shader_obj.shader_metadata.inputs.resources {
+		temp_vertex_attr[idx] = {
+			location = input.location,
+			format   = input.format,
+			offset   = current_offset,
+		}
+		current_offset += format_to_size(input.format)
 	}
+	vertex_attr := temp_vertex_attr[:]
 
 	render_state.pipeline = sdl.CreateGPUGraphicsPipeline(
 		render_state.device,
@@ -169,34 +182,29 @@ set_render_primitive :: proc(
 	fragment_shader_byte_buffer: []u8,
 ) {
 	/* 1.- create_shaders */
-	vertex_shader_obj:=get_shader_object_from_data(vertex_shader_byte_buffer)
+	render_state.vertex_shader_obj = get_shader_object_from_data(vertex_shader_byte_buffer)
 
-	vertex_shader := load_shader(
-		render_state.device,
-		vertex_shader_obj,
-		.VERTEX
-	)
+	vertex_shader := load_shader(render_state.device, render_state.vertex_shader_obj, .VERTEX)
 
-	fragment_shader_object:=get_shader_object_from_data(fragment_shader_byte_buffer)
+	render_state.fragment_shader_obj = get_shader_object_from_data(fragment_shader_byte_buffer)
 
-	fragment_shader := load_shader(
-		render_state.device,
-		fragment_shader_object,
-		.FRAGMENT
-	)
+	fragment_shader := load_shader(render_state.device, render_state.fragment_shader_obj, .FRAGMENT)
 
 	/* 2.- create uniform buffer */
 	vertices_byte_size := get_vertex_buffer_size(vertices)
 
-	append(&render_state.vertex_buffers, {
-		gpu_buffer  = sdl.CreateGPUBuffer(
-			render_state.device,
-			{usage = {.VERTEX}, size = u32(vertices_byte_size)},
-		),
-		buffer_size = vertices_byte_size,
-		usage       = {.VERTEX},
-		in_use      = true,
-	})
+	append(
+		&render_state.vertex_buffers,
+		{
+			gpu_buffer = sdl.CreateGPUBuffer(
+				render_state.device,
+				{usage = {.VERTEX}, size = u32(vertices_byte_size)},
+			),
+			buffer_size = vertices_byte_size,
+			usage = {.VERTEX},
+			in_use = true,
+		},
+	)
 
 	/* 3.- Transfer buffer to GPU
 		   -> Create transfer buffer
@@ -207,9 +215,7 @@ set_render_primitive :: proc(
 
 	/* 4.- Create GPU graphics pipeline */
 	create_gpu_graphics_pipeline(
-		vertex_shader_obj,
 		vertex_shader,
-		fragment_shader_object,
 		fragment_shader,
 	)
 
